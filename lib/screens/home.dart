@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../widgets/show_result.dart';
+import '../utilities/record.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -12,19 +13,65 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   bool _isListening = false;
+  StreamSubscription<double>? _amplitudeSubscription;
+  double _currentAmplitude = 0.0;
 
-  void _startListening() {
-    setState(() {
-      _isListening = true;
-    });
+  @override
+  void dispose() {
+    _amplitudeSubscription?.cancel();
+    super.dispose();
   }
 
-  void _stopListening() {
+  void _startListening() async {
+    final hasPermission = await RecordUtility.checkPermission();
+    if (hasPermission) {
+      setState(() {
+        _isListening = true;
+      });
+      await RecordUtility.startRecording();
+      
+      // Subscribe to amplitude updates
+      _amplitudeSubscription = RecordUtility.amplitudeStream.listen((amplitude) {
+        if (amplitude > 0) {  // We'll only log when there's actual sound
+          print('Received amplitude in widget: $amplitude');
+        }
+        setState(() {
+          _currentAmplitude = amplitude;
+        });
+      });
+    } else {
+      // Handle permission denied
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Microphone permission denied')),
+        );
+      }
+    }
+  }
+
+  void _stopListening() async {
+    // Cancel amplitude subscription
+    await _amplitudeSubscription?.cancel();
+    _amplitudeSubscription = null;
+
     setState(() {
       _isListening = false;
+      _currentAmplitude = 0.0;
     });
-    displayResult(context);
+    final path = await RecordUtility.stopRecording();
+    if (path != null) {
+      if (mounted) {
+        displayResult(context);
+      }
+    }
   }
+
+  // void _cancelListening() {
+  //   setState(() {
+  //     _isListening = false;
+  //     RecordUtility.cancelRecording();
+  //   });
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +82,8 @@ class _HomeState extends State<Home> {
           children: [
             GestureDetector(
               onTap: _isListening ? _stopListening : _startListening,
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 50),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
@@ -46,11 +94,11 @@ class _HomeState extends State<Home> {
                     ],
                   ),
                   borderRadius: BorderRadius.circular(100),
-                  // border: Border.all(
-                  //   color: Colors.lightBlue[100]!,
-                  //   width: 20,
-                  //   strokeAlign: BorderSide.strokeAlignOutside,
-                  // ),
+                  border: Border.all(
+                    color: Colors.lightBlue[100]!,
+                    width: _isListening ? 10 + (_currentAmplitude * 20) : 0,
+                    strokeAlign: BorderSide.strokeAlignOutside,
+                  ),
                 ),
                 width: 172,
                 height: 172,

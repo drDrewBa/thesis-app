@@ -32,24 +32,20 @@ Future displayResult(BuildContext context) {
                       ),
                     ),
                     SizedBox(height: 24),
-                    Container(
-                      width: 160,
-                      height: 160,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                    Image(
+                      image: AssetImage('assets/images/burp2.png'),
+                      width: 156,
+                      height: 156,
                     ),
-                    SizedBox(height: 32),
                     Text(
-                      'Your baby is hungry',
+                      'Your baby needs to burp',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w600,
                         color: Colors.black,
                       ),
                     ),
-                    SizedBox(height: 32),
+                    SizedBox(height: 28),
                     Container(
                       width: 320,
                       height: 88,
