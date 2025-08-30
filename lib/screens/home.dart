@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import '../widgets/show_result.dart';
 import '../utilities/record.dart';
 
 class Home extends StatefulWidget {
@@ -40,7 +39,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       _amplitudeTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
         setState(() {
           _currentAmplitude = RecordUtility.currentAmplitude;
-          print('Border Width: ${10 + (_currentAmplitude * 15)} pixels');
         });
       });
     } catch (e) {
@@ -59,7 +57,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         _isListening = false;
         _currentAmplitude = 0.0;
       });
-      displayResult(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error stopping recording: $e')),
