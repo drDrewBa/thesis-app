@@ -1,104 +1,52 @@
-import 'dart:async';
-import 'package:record/record.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class RecordUtility {
-  static final AudioRecorder _audioRecorder = AudioRecorder();
-  static String? _filePath;
-  static bool _isRecording = false;
-  static StreamController<double>? _amplitudeController;
-  static Timer? _amplitudeTimer;
+  static final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
+  static bool _isInitialized = false;
+  static double _currentAmplitude = 0.0;
 
-  static Stream<double> get amplitudeStream => 
-      _amplitudeController?.stream ?? const Stream.empty();
+  static Future<void> initialize() async {
+    if (!_isInitialized) {
+      final status = await Permission.microphone.request();
+      if (status != PermissionStatus.granted) {
+        throw Exception('Microphone permission not granted');
+      }
+
+      await _recorder.openRecorder();
+      _isInitialized = true;
+    }
+  }
 
   static Future<void> startRecording() async {
-    try {
-      if (!_isRecording) {
-        if (await _audioRecorder.hasPermission()) {
-          // Get the application documents directory
-          final directory = await getApplicationDocumentsDirectory();
-          // Create a unique filename with timestamp
-          final timestamp = DateTime.now().millisecondsSinceEpoch;
-          _filePath = path.join(directory.path, 'audio_$timestamp.m4a');
+    if (!_isInitialized) await initialize();
+    
+    await _recorder.startRecorder(
+      toFile: 'temp.aac',
+      codec: Codec.aacADTS,
+    );
 
-          // Initialize amplitude stream
-          _amplitudeController = StreamController<double>.broadcast();
-          
-          // Start recording
-          await _audioRecorder.start(
-            const RecordConfig(
-              encoder: AudioEncoder.aacLc,
-              bitRate: 128000,
-              sampleRate: 44100,
-            ),
-            path: _filePath!,
-          );
-          _isRecording = true;
-
-          // Start monitoring amplitude
-          _amplitudeTimer = Timer.periodic(const Duration(milliseconds: 100), (_) async {
-            if (_isRecording && _amplitudeController != null && !_amplitudeController!.isClosed) {
-              final amplitude = await _audioRecorder.getAmplitude();
-              // Only log non-zero amplitudes
-              if (amplitude.current > -30) {  // -30dB is our baseline
-                print('Raw amplitude: ${amplitude.current}');
-                print('Normalized amplitude: ${(amplitude.current + 30) / 30}');
-              }
-              final normalized = (amplitude.current + 30) / 30;
-              final clampedValue = normalized.clamp(0.0, 1.0);
-              _amplitudeController!.add(clampedValue);
-            }
-          });
-        }
-      }
-    } catch (e) {
-      print('Error starting recording: $e');
-    }
+    // Start amplitude updates
+    _recorder.setSubscriptionDuration(const Duration(milliseconds: 50));
+    _recorder.onProgress!.listen((event) {
+      final decibels = event.decibels ?? 0;
+      print('Raw Decibel Level: $decibels dB');
+      
+      // Convert decibels to a 0-1 range for the UI
+      // Typical range we're seeing is 0-45 dB
+      _currentAmplitude = (decibels / 45).clamp(0.0, 1.0);
+      print('Normalized Amplitude: $_currentAmplitude');
+    });
   }
 
-  static Future<String?> stopRecording() async {
-    try {
-      if (_isRecording) {
-        // Stop amplitude monitoring
-        _amplitudeTimer?.cancel();
-        await _amplitudeController?.close();
-        _amplitudeTimer = null;
-        _amplitudeController = null;
-
-        final path = await _audioRecorder.stop();
-        _isRecording = false;
-        return path;
-      }
-      return null;
-    } catch (e) {
-      print('Error stopping recording: $e');
-      _isRecording = false;
-      return null;
-    }
+  static Future<void> stopRecording() async {
+    await _recorder.stopRecorder();
   }
 
-  static Future<void> cancelRecording() async {
-    try {
-      if (_isRecording) {
-        // Stop amplitude monitoring
-        _amplitudeTimer?.cancel();
-        await _amplitudeController?.close();
-        _amplitudeTimer = null;
-        _amplitudeController = null;
+  static double get currentAmplitude => _currentAmplitude;
 
-        await _audioRecorder.stop();
-        _isRecording = false;
-        // You might want to delete the file here TODO: delete the file
-      }
-    } catch (e) {
-      print('Error canceling recording: $e');
-      _isRecording = false;
-    }
-  }
-
-  static Future<bool> checkPermission() async {
-    return await _audioRecorder.hasPermission();
+  static Future<void> dispose() async {
+    await _recorder.closeRecorder();
+    _isInitialized = false;
   }
 }

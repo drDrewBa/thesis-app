@@ -11,58 +11,59 @@ class Home extends StatefulWidget {
   State<Home> createState() => _HomeState();
 }
 
-class _HomeState extends State<Home> {
+class _HomeState extends State<Home> with TickerProviderStateMixin {
   bool _isListening = false;
-  StreamSubscription<double>? _amplitudeSubscription;
   double _currentAmplitude = 0.0;
+  Timer? _amplitudeTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    RecordUtility.initialize();
+  }
 
   @override
   void dispose() {
-    _amplitudeSubscription?.cancel();
+    _amplitudeTimer?.cancel();
+    RecordUtility.dispose();
     super.dispose();
   }
 
   void _startListening() async {
-    final hasPermission = await RecordUtility.checkPermission();
-    if (hasPermission) {
+    try {
+      await RecordUtility.startRecording();
       setState(() {
         _isListening = true;
       });
-      await RecordUtility.startRecording();
-      
-      // Subscribe to amplitude updates
-      _amplitudeSubscription = RecordUtility.amplitudeStream.listen((amplitude) {
-        if (amplitude > 0) {  // We'll only log when there's actual sound
-          print('Received amplitude in widget: $amplitude');
-        }
+
+      // Start periodic amplitude updates
+      _amplitudeTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
         setState(() {
-          _currentAmplitude = amplitude;
+          _currentAmplitude = RecordUtility.currentAmplitude;
+          print('Border Width: ${10 + (_currentAmplitude * 15)} pixels');
         });
       });
-    } else {
-      // Handle permission denied
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Microphone permission denied')),
-        );
-      }
+    } catch (e) {
+      // Handle any errors, maybe show a snackbar
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error starting recording: $e')),
+      );
     }
   }
 
   void _stopListening() async {
-    // Cancel amplitude subscription
-    await _amplitudeSubscription?.cancel();
-    _amplitudeSubscription = null;
-
-    setState(() {
-      _isListening = false;
-      _currentAmplitude = 0.0;
-    });
-    final path = await RecordUtility.stopRecording();
-    if (path != null) {
-      if (mounted) {
-        displayResult(context);
-      }
+    try {
+      await RecordUtility.stopRecording();
+      _amplitudeTimer?.cancel();
+      setState(() {
+        _isListening = false;
+        _currentAmplitude = 0.0;
+      });
+      displayResult(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error stopping recording: $e')),
+      );
     }
   }
 
@@ -96,7 +97,7 @@ class _HomeState extends State<Home> {
                   borderRadius: BorderRadius.circular(100),
                   border: Border.all(
                     color: Colors.lightBlue[100]!,
-                    width: _isListening ? 10 + (_currentAmplitude * 20) : 0,
+                    width: _isListening ? 10 + (_currentAmplitude * 15) : 0,
                     strokeAlign: BorderSide.strokeAlignOutside,
                   ),
                 ),
