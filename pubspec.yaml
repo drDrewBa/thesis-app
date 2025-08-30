@@ -70,6 +70,8 @@ flutter:
     - assets/images/burp2.png
     - assets/images/gassy2.png
     - assets/images/uncomfy2.png
+    - assets/models/fan_classification_model.tflite
+    - assets/models/fan_detection_model.tflite
     # - images/a_dot_ham.jpeg
     # - images/a_dot_burr.jpeg
 
